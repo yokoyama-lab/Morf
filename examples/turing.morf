@@ -1,0 +1,109 @@
+(* The machine T = (Q, Σ, δ, b, q_init, q_final) computes a bitwise negation.    *)
+(* sem [A0; A0; A0; A1; A1; A0; A1; A0]                                          *)
+(*   → [A1; A1; A1; A0; A0; A1; A0; A1]                                          *)
+
+type bool            = False | True
+type nat             = Z (* 0 *) | S (* n *) of nat
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+
+(* State set Q *)
+type q = Init | Next | Flip | Done | Back | Final
+
+(* Tape alphabet Σ = { B, A0, A1 }  where B is the blank symbol *)
+type s = B | A0 | A1
+
+(* --------------------------------------------------------------------------- *)
+(* Transition relation δ                                                       *)
+(* A tape is represented as (left, head, right) where left is reversed.       *)
+(* --------------------------------------------------------------------------- *)
+
+let delta = match with
+| (Init, (l, B, r))       <-> (Next, (l, B, r))
+| (Next, (l, s, s' :: r)) <-> (Flip, (s :: l, s', r))
+| (Flip, (l, A0, r))      <-> (Next, (l, A1, r))
+| (Flip, (l, A1, r))      <-> (Next, (l, A0, r))
+| (Flip, (l, B, r))       <-> (Back, (l, B, r))
+| (Back, (s' :: l, s, r)) <-> (Done, (l, s', s :: r))
+| (Done, (l, A0, r))      <-> (Back, (l, A0, r))
+| (Done, (l, A1, r))      <-> (Back, (l, A1, r))
+| (Done, (l, B, r))       <-> (Final, (l, B, r))
+
+(* delta_fwd: one step forward; returns (new_config, done?) *)
+let delta_fwd = match with c <->
+  match delta c with
+  | (Init, t)  <-> ((Init, t), False)
+  | (Next, t)  <-> ((Next, t), False)
+  | (Flip, t)  <-> ((Flip, t), False)
+  | (Done, t)  <-> ((Done, t), False)
+  | (Back, t)  <-> ((Back, t), False)
+  | (Final, t) <-> ((Final, t), True)
+
+(* delta_bwd: one step backward; returns (new_config, done?) *)
+let delta_bwd = match with c <->
+  match inv delta c with
+  | (Init, t)  <-> ((Init, t), True)
+  | (Next, t)  <-> ((Next, t), False)
+  | (Flip, t)  <-> ((Flip, t), False)
+  | (Done, t)  <-> ((Done, t), False)
+  | (Back, t)  <-> ((Back, t), False)
+  | (Final, t) <-> ((Final, t), False)
+
+(* rmb: remove trailing blank symbols from a tape side,                       *)
+(*      returning (cleaned_tape, count_of_removed_blanks)                     *)
+let rec rmb = match with
+| []       <-> ([], 0)
+| B :: t   <-> let ([], n) = rmb t in ([], S n)
+| A0 :: t  <-> let (t, n) = rmb t in (A0 :: t, n)
+| A1 :: t  <-> let (t, n) = rmb t in (A1 :: t, n)
+
+(* extend_if_empty: if the tape side is empty, extend it with a blank symbol  *)
+let rec extend_if_empty = match with
+| []      <-> ([B], True)
+| x :: xs <-> (x :: xs, False)
+
+(* extend: extend both sides of the tape if empty                             *)
+let extend = match with (q, (l, s, r)) <->
+  let (l, bl) = extend_if_empty l in
+  let (r, br) = extend_if_empty r in
+  ((q, (l, s, r)), (bl, br))
+
+(* iter delta: iterate delta until it returns True (halting condition),       *)
+(*             collecting the extend-flags as garbage                         *)
+let rec iter delta = match with c <->
+  let (c, g) = extend c in
+  match (delta c, g) with
+  | ((c, True), g)  <-> (c, [(g, True)])
+  | ((c, False), g) <->
+    let (c, gs) = iter delta c in
+    (c, (g, False) :: gs)
+
+(* clean_up: remove trailing blanks introduced by extend from both tape sides *)
+let clean_up = match with ((x, (l, y, r)), g) <->
+  let (l, n1) = rmb l in
+  let (r, n2) = rmb r in
+  ((x, (l, y, r)), (g, n1, n2))
+
+(* compose: function composition for isos                                     *)
+let compose g f = match with x <-> g (f x)
+
+(* rm_garb: Bennett's trick — run f, then inv_f to erase the garbage g,      *)
+(*          then run f' to produce the final output garbage-free              *)
+let rm_garb f f' = match with i <->
+  let (o, g)  = f i in
+  let (o, o') = (o, o) in
+  let i       = inv f (o, g) in
+  let (i', g) = f' o' in
+  let (i, i)  = (i, i') in
+  inv f' (i, g)
+
+(* compute: run the full TM computation garbage-free                          *)
+let compute = rm_garb
+  {compose clean_up {iter delta_fwd}}
+  {compose clean_up {iter delta_bwd}}
+
+(* sem: string semantics — maps input tape to output tape                     *)
+let sem = match with tape <->
+  let (Final, ([], B, tape)) =
+    compute (Init, ([], B, tape)) in tape
+
+sem [A0; A0; A0; A1; A1; A0; A1; A0]

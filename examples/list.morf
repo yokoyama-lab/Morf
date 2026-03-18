@@ -1,0 +1,81 @@
+type bool            = False | True
+type 'a option       = None | Some of 'a
+type ('l, 'r) either = Left of 'l | Right of 'r
+type 'a list         = Nil (* [] *) | Cons (* :: *) of 'a * 'a list
+type nat             = Z (* 0 *) | S (* n *) of nat
+
+let rec len = match with
+| []      <-> (0, [])
+| x :: xs <-> let (n, xs) = len xs in (S n, x :: xs)
+
+let rec map f = match with
+| []     <-> []
+| h :: t <-> f h :: map f t
+
+let rec double = match with
+| []      <-> []
+| x :: xs <-> x :: x :: double xs
+
+let rec rev' = match with
+| (l, (0, []))        <-> (l, (0, []))
+| (l, (S n, x :: xs)) <->
+  let (l, (n, xs)) = rev' (x :: l, (n, xs)) in
+  (l, (S n, xs))
+
+let rev = match with l <->
+  let (l, (n, [])) = rev' ([], len l) in
+  inv len (n, l)
+
+let rec foldl_map f = match with
+| (acc, [])      <-> (acc, [])
+| (acc, x :: xs) <->
+  let (acc, x) = f (acc, x) in
+  let (acc, xs) = foldl_map f (acc, xs) in
+  (acc, x :: xs)
+
+let rec repeat = match with
+| (0, x)   <-> ([], x)
+| (S n, x) <->
+  let (xs, x) = repeat (n, x) in
+  (x :: xs, x)
+
+let rec split = match with
+| []           <-> ([], [])
+| (x, y) :: tl <->
+  let (xs, ys) = split tl in
+  (x :: xs, y :: ys)
+
+let merge = inv split
+
+let rec partition' = match with
+| (l, r, 0)         <-> (l, r, 0)
+| (l, x :: xs, S n) <->
+  let (l, xs, n) = partition' (x :: l, xs, n) in
+  (l, xs, S n)
+
+let partition = match with (r, n) <->
+  let (l, r, n) = partition' ([], r, n) in
+  (rev (inv len (n, l)), r)
+
+let concat = inv partition
+
+(* add (m, n) = (m + n, n) *)
+let rec add = match with
+| (m, S n) <-> let (m, n) = add (S m, n) in (m, S n)
+| (m, 0)   <-> (m, 0)
+
+let rec sum = match with l <-> foldl_map add (0, l)
+
+let rec iota' = match with
+| 0   <-> []
+| S n <-> let (n, n') = (n, n) in n :: iota' n'
+
+let iota = match with n <-> rev (iota' n)
+
+let rec push_back = match with
+| ([], y)      <-> [y]
+| (x :: xs, y) <->
+  let y :: xs = push_back (xs, y) in
+  x :: y :: xs
+
+double (iota 5)

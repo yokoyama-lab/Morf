@@ -1,0 +1,17 @@
+type    bool = False | True
+type     nat = Z | S of nat
+type 'a list = Nil | Cons of 'a * 'a list
+
+let rec len = match with
+| []      <-> (0, [])
+| x :: xs <-> let (n, xs) = len xs in (S n, x :: xs)
+
+let rec map f = match with
+| []      <-> []
+| x :: xs <-> f x :: map f xs
+
+let rec split = match with
+| []          <-> ([], [])
+| (x, y) :: t <-> let (xs, ys) = split t in (x :: xs, y :: ys)
+
+split (map len [[True; False]; []; [False]])
